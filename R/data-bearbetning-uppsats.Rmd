@@ -1,0 +1,148 @@
+---
+title: "Thesis5may"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+ess <- read_csv("data/ESS1-8e01.csv")
+oecd <- read_csv("data/oecd-data-env.csv")
+wb <- read_csv("data/world-bank.csv")
+qogt <- read_csv("data/qog_bas_ts_jan19.csv")
+ess8 <- haven::read_sav("data/ESS8e02_1.sav")
+```
+
+```{r}
+library(janitor)
+oecd <- clean_names(oecd)
+
+oecd %>% 
+  group_by(variable) %>% 
+  count()
+```
+
+```{r}
+library(stringr)
+  library(janitor)
+oecd_tidy <- oecd %>% 
+  select(country, variable, domain, year, value) %>% 
+  spread(variable, value) %>% 
+  clean_names() %>% 
+  filter(!str_detect(country, "OECD"))
+```
+
+```{r}
+oecd_tidy <- oecd_tidy %>% 
+  filter(domain %in% c("Energy", "Motor vehicles and transport")) %>% 
+  select(country, domain, year, tax_revenue_per_capita_2010_usd_ppp) %>% 
+  spread(domain, tax_revenue_per_capita_2010_usd_ppp) %>% 
+  clean_names()
+```
+
+```{r}
+library(stringr)
+wb <- read_csv("data/world-bank.csv") %>% 
+  clean_names()
+wb_tidy <- wb %>% 
+  filter(indicator_id == 665) %>% 
+  gather(year, pol_trust, x2007_2008:x2018) %>% 
+  mutate(year = as.integer(str_extract(year, "[[:digit:]]{4}")))
+```
+
+```{r}
+  oecd_wb <- oecd_tidy %>% 
+  left_join(wb_tidy %>% 
+              select(country_name, year, pol_trust),
+              by = c("year", "country" = "country_name"))
+```
+
+```{r}
+oecd_wb_qog <- oecd_wb %>% 
+  left_join(qogt %>% 
+              select(cname, year, ajr_settmort:wr_regtype),
+              by = c("country" = "cname", "year"))
+```
+
+```{r}
+ess_sum <- ess %>% 
+  group_by(cntry, essround) %>% 
+  summarise(
+ppltrst = weighted.mean(ppltrst, w = pweight, na.rm = T),
+pplfair = weighted.mean(pplfair, w = pweight, na.rm = T),
+pplhlp = weighted.mean(pplhlp, w = pweight, na.rm = T),
+trstplc = weighted.mean(trstplc, w = pweight, na.rm = T),
+trstlgl = weighted.mean(trstlgl, w = pweight, na.rm = T),
+trstprt = weighted.mean(trstprt, w = pweight, na.rm = T),
+trstprl = weighted.mean(trstprl, w = pweight, na.rm = T),
+trstplt = weighted.mean(trstplt, w = pweight, na.rm = T),
+impen = weighted.mean(impenv, w = pweight, na.rm = T)) %>% 
+  mutate(year = case_when(
+    essround == 1 ~ 2002,
+    essround == 2 ~ 2004,
+    essround == 3 ~ 2006,
+    essround == 4 ~ 2008,
+    essround == 5 ~ 2010,
+    essround == 6 ~ 2012,
+    essround == 7 ~ 2014,
+    essround == 8 ~ 2016
+  ))
+```
+s
+Översätta landskod till landsnamn.
+
+```{r}
+library(countrycode)
+
+ess_sum <- ess_sum %>% 
+ mutate(country = countrycode(cntry, 'iso2c', "country.name")) 
+```
+
+Nu ska vi joina!
+
+```{r}
+ess_tot <- ess_sum %>% 
+  left_join(oecd_wb_qog, by = c("country", "year"))
+```
+
+För ESS 2016 separat.
+
+```{r}
+ess8 %>% 
+  group_by(cntry) %>% 
+  summarise(
+    inctxff = weighted.mean(inctxff, w = pweight, na.rm =T),
+    cflsenr  = weighted.mean(cflsenr, w = pweight, na.rm =T),
+    ownrdcc = weighted.mean(ownrdcc, w = pweight, na.rm =T),
+    lklmten = weighted.mean(lklmten, w = pweight, na.rm =T),
+    lkredcc = weighted.mean(lkredcc, w = pweight, na.rm =T),
+    gvsrdcc = weighted.mean(gvsrdcc, w = pweight, na.rm =T),
+    ccrdprs = weighted.mean(ccrdprs, w = pweight, na.rm =T),
+    wrclmch = weighted.mean(wrclmch, w = pweight, na.rm =T),
+    clmthgt1 = weighted.mean(clmthgt1, w = pweight, na.rm =T),
+    ppltrst = weighted.mean(ppltrst, w = pweight, na.rm = T),
+    pplfair = weighted.mean(pplfair, w = pweight, na.rm = T),
+    pplhlp = weighted.mean(pplhlp, w = pweight, na.rm = T),
+    trstplc = weighted.mean(trstplc, w = pweight, na.rm = T),
+    trstlgl = weighted.mean(trstlgl, w = pweight, na.rm = T),
+    trstprt = weighted.mean(trstprt, w = pweight, na.rm = T),
+    trstprl = weighted.mean(trstprl, w = pweight, na.rm = T),
+    trstplt = weighted.mean(trstplt, w = pweight, na.rm = T),
+    impen = weighted.mean(impenv, w = pweight, na.rm = T)
+  ) %>% 
+  mutate(year = 2016, 
+         country = countrycode(cntry, 'iso2c', "country.name")) %>% 
+  left_join(oecd_wb_qog, by = c("country", "year")) -> ess8_tot
+```
+
+```{r}
+write_csv(ess_tot, "ess_tot.csv")
+write_csv(ess8_tot, "ess8_tot.csv")
+```
+
