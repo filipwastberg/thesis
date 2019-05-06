@@ -1,0 +1,59 @@
+---
+title: "cronbach"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Läs in data.
+
+```{r}
+library(tidyverse)
+ess_ts <- read_csv("data/ess_tot.csv")
+ess <- read_csv("data/ess8_tot.csv")
+```
+
+Testa alpha.
+
+```{r}
+library(psych)
+ess %>% 
+  select(ppltrst, pplfair, pplhlp) %>% 
+  alpha()
+```
+
+Slå ihop till ett index.
+
+```{r}
+ess <- ess %>% 
+  mutate(soctrst = (ppltrst + pplfair + pplhlp) / 3, 
+         env_tax_rev = energy + motor_vehicles_and_transport)
+
+ess_ts <- ess_ts %>% 
+  mutate(soctrst = (ppltrst + pplfair + pplhlp) / 3, 
+         env_tax_rev = energy + motor_vehicles_and_transport)
+```
+
+Testa ett första modell.
+
+```{r}
+lm(env_tax_rev ~ soctrst + icrg_qog, data = ess) %>% 
+  summary()
+```
+
+Testa data över tid.
+
+```{r}
+ess_ts <- ess_ts %>% 
+  filter_at(vars(env_tax_rev, soctrst), all_vars(!is.na(.)))
+
+ess_ts %>% 
+  group_by(year) %>% 
+  count()
+
+lm(env_tax_rev ~ soctrst + country + as.factor(year), data = ess_ts) %>% 
+  summary()
+```
+
